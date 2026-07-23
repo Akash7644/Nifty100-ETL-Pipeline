@@ -84,3 +84,25 @@ def return_on_assets(
         return None
 
     return round((net_profit / total_assets) * 100, 2)
+
+def roce_benchmark(
+    roce: float | None,
+    broad_sector: str,
+) -> bool | None:
+    """
+    Check whether ROCE meets the expected benchmark.
+
+    Returns:
+        True  -> Meets benchmark
+        False -> Below benchmark
+        None  -> ROCE could not be computed
+    """
+
+    if roce is None:
+        return None
+
+    if broad_sector == "Financials":
+        # Financial institutions generally have structurally lower ROCE
+        return roce >= 8
+
+    return roce >= 15

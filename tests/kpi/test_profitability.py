@@ -6,6 +6,7 @@ from src.analytics.ratios import (
     return_on_equity,
     return_on_capital_employed,
     return_on_assets,
+    roce_benchmark,
 )
 
 
@@ -49,3 +50,19 @@ def test_return_on_assets():
 
 def test_return_on_assets_zero():
     assert return_on_assets(100, 0) is None
+    
+
+def test_roce_benchmark_non_financial():
+    assert roce_benchmark(18, "Industrials") is True
+
+
+def test_roce_benchmark_non_financial_fail():
+    assert roce_benchmark(10, "Industrials") is False
+
+
+def test_roce_benchmark_financial():
+    assert roce_benchmark(10, "Financials") is True
+
+
+def test_roce_benchmark_none():
+    assert roce_benchmark(None, "Financials") is None
