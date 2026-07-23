@@ -106,3 +106,111 @@ def roce_benchmark(
         return roce >= 8
 
     return roce >= 15
+
+def debt_to_equity(
+    borrowings: float,
+    equity_capital: float,
+    reserves: float,
+):
+    """
+    Debt-to-Equity Ratio
+
+    Returns:
+        float
+    """
+
+    if borrowings == 0:
+        return 0
+
+    equity = equity_capital + reserves
+
+    if equity <= 0:
+        return None
+
+    return round(borrowings / equity, 2)
+
+def high_leverage_flag(
+    debt_equity: float | None,
+    broad_sector: str,
+):
+    """
+    High leverage warning.
+
+    Financial companies are excluded.
+    """
+
+    if debt_equity is None:
+        return False
+
+    if broad_sector == "Financials":
+        return False
+
+    return debt_equity > 5
+
+def interest_coverage_ratio(
+    operating_profit: float,
+    other_income: float,
+    interest: float,
+):
+    """
+    Interest Coverage Ratio
+
+    Formula:
+        (Operating Profit + Other Income) / Interest
+
+    Returns:
+        None if interest == 0
+    """
+
+    if interest == 0:
+        return None
+
+    icr = (operating_profit + other_income) / interest
+
+    return round(icr, 2)
+
+def icr_label(icr):
+    """
+    Display label for Interest Coverage Ratio.
+    """
+
+    if icr is None:
+        return "Debt Free"
+
+    return ""
+
+def icr_warning_flag(icr):
+    """
+    Interest Coverage warning.
+
+    Returns True if company is at risk.
+    """
+
+    if icr is None:
+        return False
+
+    return icr < 1.5
+
+def net_debt(
+    borrowings: float,
+    investments: float,
+):
+    """
+    Net Debt
+    """
+
+    return round(borrowings - investments, 2)
+
+def asset_turnover(
+    sales: float,
+    total_assets: float,
+):
+    """
+    Asset Turnover Ratio
+    """
+
+    if total_assets == 0:
+        return None
+
+    return round(sales / total_assets, 2)
+
