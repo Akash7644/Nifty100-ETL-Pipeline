@@ -24,6 +24,14 @@ from src.analytics.cagr import (
     eps_cagr,
 )
 
+from src.analytics.cashflow_kpis import (
+    operating_activity_ratio,
+    investing_activity_ratio,
+    financing_activity_ratio,
+    net_cash_flow_margin,
+    cash_flow_flag,
+)
+
 DB_PATH = Path("db/nifty100.db")
 
 
@@ -37,14 +45,18 @@ def load_tables():
         "SELECT company_id, broad_sector FROM sectors",
         conn,
     )
+    cashflow = pd.read_sql(
+        "SELECT * FROM cashflow",
+        conn,
+    )
 
     conn.close()
 
-    return profit, balance, companies, sectors
+    return profit, balance, companies, sectors, cashflow
 
 
 def prepare_data():
-    profit, balance, companies, sectors = load_tables()
+    profit, balance, companies, sectors, cashflow = load_tables()
 
     df = profit.merge(
         balance,
@@ -73,6 +85,11 @@ def prepare_data():
         how="left",
     )
 
+    df = df.merge(
+        cashflow,
+        on=["company_id", "year"],
+        how="left",
+    )
     return df
 
 
@@ -151,6 +168,30 @@ def compute_financial_ratios(df):
                 row["total_assets"],
             )
             
+            operating_ratio = operating_activity_ratio(
+                row["operating_activity"],
+                row["net_profit"],
+            )
+
+            investing_ratio = investing_activity_ratio(
+                row["investing_activity"],
+                row["net_profit"],
+            )
+
+            financing_ratio = financing_activity_ratio(
+                row["financing_activity"],
+                row["borrowings"],
+            )
+
+            cash_margin = net_cash_flow_margin(
+                row["net_cash_flow"],
+                row["sales"],
+            )
+
+            cash_flag = cash_flow_flag(
+                row["net_cash_flow"],
+            )
+            
             revenue_value = None
             revenue_flag = "INSUFFICIENT"
 
@@ -222,6 +263,12 @@ def compute_financial_ratios(df):
 
                     "eps_cagr_5yr": eps_value,
                     "eps_cagr_5yr_flag": eps_flag,
+                    
+                    "operating_activity_ratio": operating_ratio,
+                    "investing_activity_ratio": investing_ratio,
+                    "financing_activity_ratio": financing_ratio,
+                    "net_cash_flow_margin": cash_margin,
+                    "cash_flow_flag": cash_flag,
                 }
             )
 
