@@ -275,6 +275,19 @@ def compute_financial_ratios(df):
     return pd.DataFrame(results)
 
 
+def save_financial_ratios(df):
+    conn = sqlite3.connect(DB_PATH)
+
+    df.to_sql(
+        "financial_ratios",
+        conn,
+        if_exists="replace",
+        index=False,
+    )
+
+    conn.close()
+
+
 if __name__ == "__main__":
     data = prepare_data()
 
@@ -292,4 +305,7 @@ if __name__ == "__main__":
         ].head(20)
     )
 
-    print(f"\nTotal Records: {len(ratios)}")
+    save_financial_ratios(ratios)
+
+    print("Financial ratios saved successfully.")
+    print(ratios.head())
