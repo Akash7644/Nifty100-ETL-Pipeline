@@ -1,0 +1,26 @@
+filters:
+
+  roe_min: null
+  debt_to_equity_max: null
+  free_cash_flow_min: null
+
+  revenue_cagr_5yr_min: null
+  pat_cagr_5yr_min: null
+  eps_cagr_5yr_min: null
+
+  operating_profit_margin_min: null
+
+  pe_max: null
+  pb_max: null
+
+  dividend_yield_min: null
+
+  interest_coverage_min: null
+
+  market_cap_min: null
+
+  net_profit_min: null
+
+  asset_turnover_min: null
+
+  sales_min: null
