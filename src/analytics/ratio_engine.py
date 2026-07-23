@@ -18,6 +18,12 @@ from src.analytics.ratios import (
     asset_turnover,
 )
 
+from src.analytics.cagr import (
+    revenue_cagr,
+    pat_cagr,
+    eps_cagr,
+)
+
 DB_PATH = Path("db/nifty100.db")
 
 
@@ -72,101 +78,152 @@ def prepare_data():
 
 def compute_financial_ratios(df):
     results = []
+    
+    grouped = df.groupby("company_id")
+    for company_id, company_data in grouped:
+        company_data = company_data.sort_values("year")
 
-    for _, row in df.iterrows():
+        for _, row in company_data.iterrows():
 
-        npm = net_profit_margin(
-            row["net_profit"],
-            row["sales"],
-        )
+            npm = net_profit_margin(
+                row["net_profit"],
+                row["sales"],
+            )
 
-        opm, opm_match = operating_profit_margin(
-            row["operating_profit"],
-            row["sales"],
-            row["opm_percentage"],
-        )
+            opm, opm_match = operating_profit_margin(
+                row["operating_profit"],
+                row["sales"],
+                row["opm_percentage"],
+            )
 
-        roe = return_on_equity(
-            row["net_profit"],
-            row["equity_capital"],
-            row["reserves"],
-        )
+            roe = return_on_equity(
+                row["net_profit"],
+                row["equity_capital"],
+                row["reserves"],
+            )
 
-        ebit = (
-            row["operating_profit"]
-            + row["interest"]
-            + row["depreciation"]
-        )
+            ebit = (
+                row["operating_profit"]
+                + row["interest"]
+                + row["depreciation"]
+            )
 
-        roce = return_on_capital_employed(
-            ebit,
-            row["equity_capital"],
-            row["reserves"],
-            row["borrowings"],
-        )
+            roce = return_on_capital_employed(
+                ebit,
+                row["equity_capital"],
+                row["reserves"],
+                row["borrowings"],
+            )
 
-        roa = return_on_assets(
-            row["net_profit"],
-            row["total_assets"],
-        )
+            roa = return_on_assets(
+                row["net_profit"],
+                row["total_assets"],
+            )
 
-        de = debt_to_equity(
-            row["borrowings"],
-            row["equity_capital"],
-            row["reserves"],
-        )
+            de = debt_to_equity(
+                row["borrowings"],
+                row["equity_capital"],
+                row["reserves"],
+            )
 
-        high_leverage = high_leverage_flag(
-            de,
-            row["broad_sector"],
-        )
+            high_leverage = high_leverage_flag(
+                de,
+                row["broad_sector"],
+            )
 
-        icr = interest_coverage_ratio(
-            row["operating_profit"],
-            row["other_income"],
-            row["interest"],
-        )
+            icr = interest_coverage_ratio(
+                row["operating_profit"],
+                row["other_income"],
+                row["interest"],
+            )
 
-        label = icr_label(icr)
+            label = icr_label(icr)
 
-        warning = icr_warning_flag(icr)
+            warning = icr_warning_flag(icr)
 
-        nd = net_debt(
-            row["borrowings"],
-            row["investments"],
-        )
+            nd = net_debt(
+                row["borrowings"],
+                row["investments"],
+            )
 
-        at = asset_turnover(
-            row["sales"],
-            row["total_assets"],
-        )
+            at = asset_turnover(
+                row["sales"],
+                row["total_assets"],
+            )
+            
+            revenue_value = None
+            revenue_flag = "INSUFFICIENT"
 
-        results.append(
-            {
-                "company_id": row["company_id"],
-                "company_name": row["company_name"],
-                "year": row["year"],
-                "broad_sector": row["broad_sector"],
+            pat_value = None
+            pat_flag = "INSUFFICIENT"
 
-                "net_profit_margin_pct": npm,
-                "operating_profit_margin_pct": opm,
-                "opm_match": opm_match,
+            eps_value = None
+            eps_flag = "INSUFFICIENT"
 
-                "return_on_equity_pct": roe,
-                "return_on_capital_employed_pct": roce,
-                "return_on_assets_pct": roa,
+            current_year = row["year"]
 
-                "debt_to_equity": de,
-                "high_leverage_flag": high_leverage,
+            history = company_data[company_data["year"] <= current_year]
 
-                "interest_coverage": icr,
-                "icr_label": label,
-                "interest_warning": warning,
+            if len(history) >= 6:
 
-                "net_debt": nd,
-                "asset_turnover": at,
-            }
-        )
+                start = history.iloc[-6]
+                end = history.iloc[-1]
+
+                revenue_value, revenue_flag = revenue_cagr(
+                    start["sales"],
+                    end["sales"],
+                    len(history),
+                    5,
+                )
+
+                pat_value, pat_flag = pat_cagr(
+                    start["net_profit"],
+                    end["net_profit"],
+                    len(history),
+                    5,
+                )
+
+                eps_value, eps_flag = eps_cagr(
+                    start["eps"],
+                    end["eps"],
+                    len(history),
+                    5,
+                )
+            results.append(
+                {
+                    "company_id": row["company_id"],
+                    "company_name": row["company_name"],
+                    "year": row["year"],
+                    "broad_sector": row["broad_sector"],
+
+                    "net_profit_margin_pct": npm,
+                    "operating_profit_margin_pct": opm,
+                    "opm_match": opm_match,
+
+                    "return_on_equity_pct": roe,
+                    "return_on_capital_employed_pct": roce,
+                    "return_on_assets_pct": roa,
+
+                    "debt_to_equity": de,
+                    "high_leverage_flag": high_leverage,
+
+                    "interest_coverage": icr,
+                    "icr_label": label,
+                    "interest_warning": warning,
+
+                    "net_debt": nd,
+                    "asset_turnover": at,
+                    
+                    "revenue_cagr_5yr": revenue_value,
+                    "revenue_cagr_5yr_flag": revenue_flag,
+
+                    "pat_cagr_5yr": pat_value,
+                    "pat_cagr_5yr_flag": pat_flag,
+
+                    "eps_cagr_5yr": eps_value,
+                    "eps_cagr_5yr_flag": eps_flag,
+                }
+            )
 
     return pd.DataFrame(results)
 
@@ -176,6 +233,16 @@ if __name__ == "__main__":
 
     ratios = compute_financial_ratios(data)
 
-    print(ratios.head())
+    print(
+        ratios[
+            [
+                "company_id",
+                "year",
+                "revenue_cagr_5yr",
+                "pat_cagr_5yr",
+                "eps_cagr_5yr",
+            ]
+        ].head(20)
+    )
 
     print(f"\nTotal Records: {len(ratios)}")
