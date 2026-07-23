@@ -3,6 +3,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.utils.logger import logger
+
 from src.analytics.ratios import (
     net_profit_margin,
     operating_profit_margin,
@@ -34,17 +36,20 @@ from src.analytics.cashflow_kpis import (
 
 DB_PATH = Path("db/nifty100.db")
 
-
 def load_tables():
     conn = sqlite3.connect(DB_PATH)
 
     profit = pd.read_sql("SELECT * FROM profitandloss", conn)
+
     balance = pd.read_sql("SELECT * FROM balancesheet", conn)
+
     companies = pd.read_sql("SELECT * FROM companies", conn)
+
     sectors = pd.read_sql(
         "SELECT company_id, broad_sector FROM sectors",
         conn,
     )
+
     cashflow = pd.read_sql(
         "SELECT * FROM cashflow",
         conn,
@@ -52,10 +57,16 @@ def load_tables():
 
     conn.close()
 
-    return profit, balance, companies, sectors, cashflow
-
-
+    return (
+        profit,
+        balance,
+        companies,
+        sectors,
+        cashflow,
+    )
+    
 def prepare_data():
+
     profit, balance, companies, sectors, cashflow = load_tables()
 
     df = profit.merge(
@@ -90,22 +101,52 @@ def prepare_data():
         on=["company_id", "year"],
         how="left",
     )
+
     return df
 
+def validation_summary(df):
 
-def compute_financial_ratios(df):
-    results = []
+    return {
+        "Total Rows": len(df),
+
+        "Missing ROE":
+        df["return_on_equity_pct"].isna().sum(),
+
+        "Missing ROA":
+        df["return_on_assets_pct"].isna().sum(),
+
+        "Missing Debt to Equity":
+        df["debt_to_equity"].isna().sum(),
+
+        "Missing Revenue CAGR":
+        df["revenue_cagr_5yr"].isna().sum(),
+
+        "Negative Cash Flow":
+        (
+            df["cash_flow_flag"] == "NEGATIVE"
+        ).sum(),
+    }
     
+def compute_financial_ratios(df):
+
+    results = []
+
     grouped = df.groupby("company_id")
+
     for company_id, company_data in grouped:
+
         company_data = company_data.sort_values("year")
 
         for _, row in company_data.iterrows():
-
             npm = net_profit_margin(
                 row["net_profit"],
                 row["sales"],
             )
+
+            if npm is None:
+                logger.warning(
+                    f"{row['company_id']} ({row['year']}): Net Profit Margin could not be calculated."
+                )
 
             opm, opm_match = operating_profit_margin(
                 row["operating_profit"],
@@ -118,6 +159,11 @@ def compute_financial_ratios(df):
                 row["equity_capital"],
                 row["reserves"],
             )
+
+            if roe is None:
+                logger.warning(
+                    f"{row['company_id']} ({row['year']}): ROE could not be calculated."
+                )
 
             ebit = (
                 row["operating_profit"]
@@ -137,11 +183,21 @@ def compute_financial_ratios(df):
                 row["total_assets"],
             )
 
+            if roa is None:
+                logger.warning(
+                    f"{row['company_id']} ({row['year']}): ROA could not be calculated."
+                )
+            
             de = debt_to_equity(
                 row["borrowings"],
                 row["equity_capital"],
                 row["reserves"],
             )
+
+            if de is None:
+                logger.warning(
+                    f"{row['company_id']} ({row['year']}): Debt to Equity could not be calculated."
+                )
 
             high_leverage = high_leverage_flag(
                 de,
@@ -203,7 +259,9 @@ def compute_financial_ratios(df):
 
             current_year = row["year"]
 
-            history = company_data[company_data["year"] <= current_year]
+            history = company_data[
+                company_data["year"] <= current_year
+            ]
 
             if len(history) >= 6:
 
@@ -230,6 +288,12 @@ def compute_financial_ratios(df):
                     len(history),
                     5,
                 )
+
+            if revenue_flag != "NORMAL":
+                logger.warning(
+                    f"{row['company_id']} ({row['year']}): Revenue CAGR -> {revenue_flag}"
+                )
+                
             results.append(
                 {
                     "company_id": row["company_id"],
@@ -237,6 +301,7 @@ def compute_financial_ratios(df):
                     "year": row["year"],
                     "broad_sector": row["broad_sector"],
 
+                    # Profitability Ratios
                     "net_profit_margin_pct": npm,
                     "operating_profit_margin_pct": opm,
                     "opm_match": opm_match,
@@ -245,6 +310,7 @@ def compute_financial_ratios(df):
                     "return_on_capital_employed_pct": roce,
                     "return_on_assets_pct": roa,
 
+                    # Leverage Ratios
                     "debt_to_equity": de,
                     "high_leverage_flag": high_leverage,
 
@@ -254,7 +320,8 @@ def compute_financial_ratios(df):
 
                     "net_debt": nd,
                     "asset_turnover": at,
-                    
+
+                    # CAGR
                     "revenue_cagr_5yr": revenue_value,
                     "revenue_cagr_5yr_flag": revenue_flag,
 
@@ -263,7 +330,8 @@ def compute_financial_ratios(df):
 
                     "eps_cagr_5yr": eps_value,
                     "eps_cagr_5yr_flag": eps_flag,
-                    
+
+                    # Cash Flow KPIs
                     "operating_activity_ratio": operating_ratio,
                     "investing_activity_ratio": investing_ratio,
                     "financing_activity_ratio": financing_ratio,
@@ -271,11 +339,11 @@ def compute_financial_ratios(df):
                     "cash_flow_flag": cash_flag,
                 }
             )
-
+                            
     return pd.DataFrame(results)
 
-
 def save_financial_ratios(df):
+
     conn = sqlite3.connect(DB_PATH)
 
     df.to_sql(
@@ -286,26 +354,44 @@ def save_financial_ratios(df):
     )
 
     conn.close()
-
-
+    
 if __name__ == "__main__":
+
     data = prepare_data()
 
     ratios = compute_financial_ratios(data)
+
+    save_financial_ratios(ratios)
+
+    Path("reports").mkdir(exist_ok=True)
+
+    summary = validation_summary(ratios)
+
+    summary_df = pd.DataFrame([summary])
+
+    summary_df.to_csv(
+        "reports/validation_summary.csv",
+        index=False,
+    )
+
+    print("\nValidation Summary")
+    print(summary_df)
+
+    print("\nFinancial ratios saved successfully.")
+
+    print("\nPreview of Financial Ratios")
 
     print(
         ratios[
             [
                 "company_id",
                 "year",
+                "net_profit_margin_pct",
+                "debt_to_equity",
                 "revenue_cagr_5yr",
-                "pat_cagr_5yr",
-                "eps_cagr_5yr",
+                "cash_flow_flag",
             ]
         ].head(20)
     )
 
-    save_financial_ratios(ratios)
-
-    print("Financial ratios saved successfully.")
-    print(ratios.head())
+    print(f"\nTotal Records: {len(ratios)}")
